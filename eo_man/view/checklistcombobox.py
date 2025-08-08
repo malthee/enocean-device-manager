@@ -183,52 +183,102 @@ class ChecklistCombobox(ttk.Combobox):
         self.b1_motion_entered_popdown = False
         self.configure_popdown() # Initial configuration
         self.topbutton = 0
-        if len(self.cget('values')) > self.cget('height'):
-            self.bottombutton = self.cget('height')-1
-        else:
-            self.bottombutton = len(self.checkbuttons)-1
+        try:
+            # Try to get values and height, with fallback for macOS Tkinter issues
+            values_len = len(self.cget('values')) if self.cget('values') else 0
+            height = self.cget('height') if self.cget('height') else 10
+            if values_len > height:
+                self.bottombutton = height - 1
+            else:
+                self.bottombutton = len(self.checkbuttons) - 1 if self.checkbuttons else 0
+        except Exception as e:
+            # Fallback for macOS Tkinter issues
+            self.bottombutton = len(self.checkbuttons) - 1 if self.checkbuttons else 0
         
         self.previous_button_kw = {}
         if self.checkbuttons:
             self.selection = 0
-            for key in self.checkbuttons[self.selection].keys():
-                self.previous_button_kw[key] = self.checkbuttons[self.selection].cget(key)
-            # Select the button
-            self.checkbuttons[self.selection].configure(bg=self.checkbutton_selected_background[self.selection],
-                                                        fg=self.checkbutton_selected_foreground[self.selection],
-                                                        selectcolor=self.checkbutton_selected_selectcolor[self.selection],
-                                                        activebackground=self.checkbutton_selected_activebackground[self.selection],
-                                                        activeforeground=self.checkbutton_selected_activeforeground[self.selection])
+            try:
+                # Get the configuration keys from the checkbutton widget
+                button_widget = self.checkbuttons[self.selection]
+                if button_widget and button_widget.winfo_exists():
+                    # Use configure() to get available configuration options
+                    config_dict = button_widget.configure()
+                    for key in config_dict.keys():
+                        try:
+                            self.previous_button_kw[key] = button_widget.cget(key)
+                        except Exception:
+                            # Skip keys that can't be read
+                            pass
+                    
+                    # Select the button
+                    self.checkbuttons[self.selection].configure(bg=self.checkbutton_selected_background[self.selection],
+                                                                fg=self.checkbutton_selected_foreground[self.selection],
+                                                                selectcolor=self.checkbutton_selected_selectcolor[self.selection],
+                                                                activebackground=self.checkbutton_selected_activebackground[self.selection],
+                                                                activeforeground=self.checkbutton_selected_activeforeground[self.selection])
+            except Exception as e:
+                # Fallback: just set selection without storing previous config
+                pass
             
             
         ### Create keybindings
+        try:
+            # Check if widgets are still valid before binding
+            if self.listbox and self.listbox.winfo_exists():
+                self.listbox.bind("<Down>",self.on_down) # Down arrow
+                self.listbox.bind("<Up>",self.on_up) # Up arrow
+                self.listbox.bind("<Prior>",lambda event: self.scroll(event,amount=-1,units='pages')) # PageUp
+                self.listbox.bind("<Next>",lambda event: self.scroll(event,amount=1,units='pages')) # PageDown
+                self.listbox.bind("<Control-Home>",lambda event: self.select(self.checkbuttons[0]))
+                self.listbox.bind("<Control-End>",lambda event: self.select(self.checkbuttons[-1]))
+                self.listbox.bind("<KeyPress-Return>",self.on_carraige_return) # Enter
+                self.listbox.bind("<Motion>",self.do_nothing) # Mouse motions
+                self.listbox.bind("<KeyPress-Tab>",self.on_lb_tab) # Tab
+                self.listbox.bind("<<PrevWindow>>",self.on_lb_prevwindow) # Relates to the Tab key
+                self.listbox.bind("<MouseWheel>",self.do_nothing)
+                #self.listbox.bind("<Map>",self.do_nothing) # This almost works
+                
+            if self.winfo_exists():
+                self.bind("<MouseWheel>",self.do_nothing) # MouseWheel on Entry widget in this case is nonsensical
+        except Exception as e:
+            # Ignore binding errors on macOS Tkinter
+            pass
         
-        self.listbox.bind("<Down>",self.on_down) # Down arrow
-        self.listbox.bind("<Up>",self.on_up) # Up arrow
-        self.listbox.bind("<Prior>",lambda event: self.scroll(event,amount=-1,units='pages')) # PageUp
-        self.listbox.bind("<Next>",lambda event: self.scroll(event,amount=1,units='pages')) # PageDown
-        self.listbox.bind("<Control-Home>",lambda event: self.select(self.checkbuttons[0]))
-        self.listbox.bind("<Control-End>",lambda event: self.select(self.checkbuttons[-1]))
-        self.listbox.bind("<KeyPress-Return>",self.on_carraige_return) # Enter
-        self.listbox.bind("<Motion>",self.do_nothing) # Mouse motions
-        self.listbox.bind("<KeyPress-Tab>",self.on_lb_tab) # Tab
-        self.listbox.bind("<<PrevWindow>>",self.on_lb_prevwindow) # Relates to the Tab key
-        self.listbox.bind("<MouseWheel>",self.do_nothing)
-        #self.listbox.bind("<Map>",self.do_nothing) # This almost works
-        self.bind("<MouseWheel>",self.do_nothing) # MouseWheel on Entry widget in this case is nonsensical
-        if self.tk.eval('if {[tk windowingsystem] eq "x11"} {expr {1}} else {expr {0}}'):
-            self.bind("<ButtonPress-4>",self.do_nothing)
-            self.bind("<ButtonPress-5>",self.do_nothing)
-        self.popdown.bind("<MouseWheel>",self.on_popdown_mousewheel)
-        self.bind("<ButtonPress-1>",lambda event: self.popdown.focus_set()) # Don't let the focus get set on the entry widget before mapping, to avoid "flickering"
-        #self.listbox.bind("<Map>",self.configure_popdown) # When the listbox is mapped, reconfigure the popdown
-        self.popdown_frame.bind("<Configure>",self.configure_popdown)
-        #self.popdown_frame.bind("<Map>",self.scroll_to_last_clicked_button)
-        self.popdown.bind("<Unmap>",self.popdown_unmap)
-        self.bind("<FocusOut>",self.popdown_unmap)
-        
-        self.popdown.bind("<Motion>",self.on_motion)
-        self.popdown.bind("<B1-Motion>",self.on_b1_motion)
+        try:
+            if self.tk.eval('if {[tk windowingsystem] eq "x11"} {expr {1}} else {expr {0}}'):
+                self.bind("<ButtonPress-4>",self.do_nothing)
+                self.bind("<ButtonPress-5>",self.do_nothing)
+        except Exception as e:
+            # Ignore tk.eval errors on macOS
+            pass
+            
+        try:
+            self.popdown.bind("<MouseWheel>",self.on_popdown_mousewheel)
+        except Exception as e:
+            # Ignore popdown binding errors
+            pass
+            
+        try:
+            # Protect all remaining bindings
+            if self.winfo_exists():
+                self.bind("<ButtonPress-1>",lambda event: self.popdown.focus_set()) # Don't let the focus get set on the entry widget before mapping, to avoid "flickering"
+            
+            if hasattr(self, 'popdown_frame') and self.popdown_frame.winfo_exists():
+                #self.listbox.bind("<Map>",self.configure_popdown) # When the listbox is mapped, reconfigure the popdown
+                self.popdown_frame.bind("<Configure>",self.configure_popdown)
+                #self.popdown_frame.bind("<Map>",self.scroll_to_last_clicked_button)
+                
+            if hasattr(self, 'popdown') and self.popdown.winfo_exists():
+                self.popdown.bind("<Unmap>",self.popdown_unmap)
+                self.popdown.bind("<Motion>",self.on_motion)
+                self.popdown.bind("<B1-Motion>",self.on_b1_motion)
+                
+            if self.winfo_exists():
+                self.bind("<FocusOut>",self.popdown_unmap)
+        except Exception as e:
+            # Ignore all binding errors on macOS
+            pass
         
         #self.scrollbar.bind("<ButtonPress-1>",self.on_scrollbar_click_press)
         #self.scrollbar.bind("<ButtonRelease-1>",self.on_scrollbar_click_release)

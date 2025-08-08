@@ -15,13 +15,16 @@ from ..data.filter import DataFilter
 class FilterBar():
     
     def __init__(self, main: Tk, app_bus:AppBus, data_manager:DataManager, row:int):
+        print("DEBUG: FilterBar.__init__ - Starting initialization")
         self.app_bus = app_bus
         self.data_manager = data_manager
         
+        print("DEBUG: FilterBar.__init__ - Creating LabelFrame")
         f = LabelFrame(main, text= "Tabel Filter", bd=1, relief=SUNKEN)
         f.grid(row=row, column=0, columnspan=1, sticky=W+E+N+S, pady=(0,2), padx=2)
         self.root = f
 
+        print("DEBUG: FilterBar.__init__ - Creating filter name controls")
         # filter name
         col = 0
         l = Label(f, text="Filter Name:")
@@ -77,8 +80,16 @@ class FilterBar():
         l = Label(f, text="Device Type:")
         l.grid(row=0, column=col, padx=(0,3), sticky=W)
 
+        print("DEBUG: FilterBar - About to create ChecklistCombobox for device type")
         values = data_helper.get_known_device_types()
-        self.cb_device_type = ChecklistCombobox(f, values=values, width="14") 
+        print(f"DEBUG: FilterBar - Device type values: {len(values)} items")
+        try:
+            # Temporarily use a simple Combobox instead of ChecklistCombobox for macOS compatibility
+            self.cb_device_type = ttk.Combobox(f, values=values, width=14)
+            print("DEBUG: FilterBar - Simple Combobox created successfully as ChecklistCombobox replacement")
+        except Exception as e:
+            print(f"ERROR: FilterBar - Failed to create Combobox: {e}")
+            raise
         self.cb_device_type.grid(row=1, column=col, padx=(0,3) )
         self.cb_device_type.bind('<Return>', self.apply_filter)
         self.cb_device_type.bind("<KeyRelease>", lambda e: self.cb_filtername.set('') )
@@ -88,8 +99,11 @@ class FilterBar():
         l = Label(f, text="Device EEP:")
         l.grid(row=0, column=col, padx=(0,3), sticky=W)
 
+        print("DEBUG: FilterBar - Creating EEP Combobox")
         values = data_helper.get_all_eep_names()
-        self.cb_device_eep = ChecklistCombobox(f, values=values, width="14") 
+        # Temporarily use a simple Combobox instead of ChecklistCombobox for macOS compatibility
+        self.cb_device_eep = ttk.Combobox(f, values=values, width=14)
+        print("DEBUG: FilterBar - EEP Combobox created successfully")
         self.cb_device_eep.grid(row=1, column=col, padx=(0,3))
         self.cb_device_eep.bind('<Return>', self.apply_filter)
         self.cb_device_eep.bind("<KeyRelease>", lambda e: self.cb_filtername.set('') )

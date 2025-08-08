@@ -1,10 +1,13 @@
 from enum import Enum
 from serial import rs485
-from typing import Iterator
+from typing import Iterator, Dict, List
 from termcolor import colored
+import asyncio
 import logging
 import threading
 import socket
+import platform
+import time
 
 import serial.tools.list_ports
 
@@ -166,7 +169,7 @@ class SerialController():
                 
                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': f"Found device: {dev}", 'color':'grey'})
                 self.app_bus.fire_event(AppBusEventType.DEVICE_SCAN_STATUS, 'DEVICE_DETECTED')
-                asyncio.run( self.app_bus.fire_event(AppBusEventType.ASYNC_DEVICE_DETECTED, {'device': dev, 'base_id': self.current_base_id, 'force_overwrite': True}) )
+                self.app_bus.fire_event(AppBusEventType.ASYNC_DEVICE_DETECTED, {'device': dev, 'base_id': self.current_base_id, 'force_overwrite': True})
 
 
     def connection_status_handler(self, connected: bool):

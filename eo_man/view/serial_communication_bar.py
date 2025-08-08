@@ -144,7 +144,9 @@ class SerialConnectionBar():
         
 
     def on_window_loaded(self, data):
-        self.detect_serial_ports_command()
+        # Disable automatic serial port detection on macOS - user should manually click detect
+        # self.detect_serial_ports_command()
+        pass
 
 
     def scan_for_devices(self):
@@ -208,7 +210,8 @@ class SerialConnectionBar():
             self.cb_device_type.config(state="readonly")
             self.b_scan.config(state=DISABLED)
             self.b_sync_ha_sender.config(state=DISABLED)
-            if not skipp_serial_port_detection: self.detect_serial_ports_command()
+            # Disable automatic serial port detection on macOS - user should manually click detect
+            # if not skipp_serial_port_detection: self.detect_serial_ports_command()
 
     def update_service_endpoints(self, data:Dict[str, List[str]]=None):
 

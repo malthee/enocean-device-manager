@@ -86,24 +86,30 @@ def main():
     # init DATA MANAGER
     data_manager = DataManager(app_bus)
 
+    # Store initial loading configuration but don't load yet
+    initial_config_file = None
+    initial_pct14_file = None
+    
     # initially load from file application data
     if opts.app_config and opts.app_config.endswith('.eodm'):
        e = {'msg': f"Initially load data from file {opts.app_config}", 'color': 'darkred'}
        app_bus.fire_event(AppBusEventType.LOG_MESSAGE, e)
-       data_manager.load_application_data_from_file(opts.app_config)
+       initial_config_file = opts.app_config
     elif opts.app_config:
        e = {'msg': f"Invalid filename {opts.app_config}. It must end with '.eodm'", 'color': 'darkred'}
        app_bus.fire_event(AppBusEventType.LOG_MESSAGE, e)
     elif opts.pct14_export and opts.pct14_export.endswith('.xml'):
         e = {'msg': f"Initially load exported data from PCT14 {opts.pct14_export}", 'color': 'darkred'}
-        devices = asyncio.run( PCT14DataManager.get_devices_from_pct14(opts.pct14_export) )
-        data_manager.load_devices(devices)
+        initial_pct14_file = opts.pct14_export
 
     # generate home assistant config instead of starting GUI
     if opts.app_config and opts.app_config.endswith('.eodm') and opts.ha_config:
+        # For CLI mode, load data immediately
+        data_manager.load_application_data_from_file(opts.app_config)
         HomeAssistantConfigurationGenerator(app_bus, data_manager).save_as_yaml_to_file(opts.ha_config)
     else:
-        MainPanel(app_bus, data_manager)
+        # For GUI mode, pass initial config to MainPanel for delayed loading
+        MainPanel(app_bus, data_manager, initial_config_file, initial_pct14_file)
 
 if __name__ == "__main__":
     main()

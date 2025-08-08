@@ -74,16 +74,19 @@ class DataManager():
 
 
     def load_devices(self, devices:dict[str:Device]):
+        print(f"DEBUG: DataManager.load_devices called with {len(devices)} devices")
         # load FAM14 first because of dependencies
         d_list =  [d.external_id for d in devices.values() if d.is_fam14()] 
         d_list += [d.external_id for d in devices.values() if not d.is_fam14()] 
         for key in d_list:
             device:Device = devices[key]
             self.devices[key] = device
+            print(f"DEBUG: Firing event for device {device.external_id}, is_bus_device: {device.is_bus_device()}")
             if device.is_bus_device():
                 self.app_bus.fire_event(AppBusEventType.UPDATE_DEVICE_REPRESENTATION, device)
             else:
                 self.app_bus.fire_event(AppBusEventType.UPDATE_SENSOR_REPRESENTATION, device)
+        print(f"DEBUG: DataManager.load_devices completed, total devices in manager: {len(self.devices)}")
 
 
     def load_application_data_from_file(self, filename:str):

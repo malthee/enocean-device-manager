@@ -21,10 +21,9 @@ class DeviceTable():
     NON_BUS_DEVICE_LABEL:str="Distributed Devices"
 
     def __init__(self, main: Tk, app_bus:AppBus, data_manager:DataManager):
-        
         self.blinking_enabled = True
         self.pane = ttk.Frame(main, padding=2)
-        # self.pane.grid(row=0, column=0, sticky=W+E+N+S)
+        # Don't use pack() when this will be added to a PanedWindow - conflicts with PanedWindow.add()
         self.root = self.pane
 
         # Scrollbar
@@ -102,11 +101,131 @@ class DeviceTable():
         self.data_manager = data_manager
 
         # initial loading
+        print(f"DEBUG: DeviceTable.__init__ - Starting initialization")
+        print(f"DEBUG: DeviceTable.__init__ - DataManager has {len(self.data_manager.devices)} devices")
+        print(f"DEBUG: DeviceTable.__init__ - Device IDs: {list(self.data_manager.devices.keys())}")
+        
         if self.data_manager.selected_data_filter_name is not None:
+            print(f"DEBUG: DeviceTable.__init__ - Setting data filter: {self.data_manager.selected_data_filter_name}")
             self._set_data_filter_handler(self.data_manager.data_fitlers[self.data_manager.selected_data_filter_name])
+            
         for d in self.data_manager.devices.values():
             parent = self.NON_BUS_DEVICE_LABEL if not d.is_bus_device() else None
+            print(f"DEBUG: DeviceTable.__init__ - Adding device {d.external_id}, is_bus_device: {d.is_bus_device()}, parent: {parent}")
             self.update_device_handler(d, parent)
+            
+        print(f"DEBUG: DeviceTable.__init__ - Initial loading complete")
+            
+        # Schedule a delayed refresh to catch any missed events during initialization
+        # This is particularly important on macOS where timing issues can occur
+        if hasattr(self.app_bus, '_tk_root') and self.app_bus._tk_root:
+            print(f"DEBUG: DeviceTable.__init__ - Scheduling delayed refresh")
+            self.app_bus._tk_root.after(100, self._delayed_refresh)
+            # Also schedule a debug check after all devices should be loaded
+            self.app_bus._tk_root.after(2000, self._debug_treeview_state)
+        else:
+            print(f"DEBUG: DeviceTable.__init__ - No tk_root available for delayed refresh")
+
+
+    def _delayed_refresh(self):
+        """Force a refresh of the treeview to catch any display issues"""
+        print(f"DEBUG: _delayed_refresh called")
+        try:
+            self.treeview.update()
+            self.treeview.update_idletasks()
+            total_items = len(self.treeview.get_children())
+            print(f"DEBUG: _delayed_refresh - Total items after refresh: {total_items}")
+            if total_items > 0:
+                first_item = self.treeview.get_children()[0]
+                print(f"DEBUG: _delayed_refresh - First item: {first_item}, text: {self.treeview.item(first_item, 'text')}")
+                # Check if item is open/expanded
+                children = self.treeview.get_children(first_item)
+                print(f"DEBUG: _delayed_refresh - First item children: {len(children)}")
+        except Exception as e:
+            print(f"DEBUG: _delayed_refresh error: {e}")
+
+    def _debug_treeview_state(self):
+        """Comprehensive debug of treeview state"""
+        print(f"DEBUG: === TREEVIEW STATE DEBUG ===")
+        try:
+            # Widget visibility
+            print(f"DEBUG: Treeview widget: {self.treeview}")
+            print(f"DEBUG: Widget visible: {self.treeview.winfo_viewable()}")
+            print(f"DEBUG: Widget mapped: {self.treeview.winfo_ismapped()}")
+            print(f"DEBUG: Widget width: {self.treeview.winfo_width()}")
+            print(f"DEBUG: Widget height: {self.treeview.winfo_height()}")
+            print(f"DEBUG: Widget x: {self.treeview.winfo_x()}")
+            print(f"DEBUG: Widget y: {self.treeview.winfo_y()}")
+            
+            # Parent information
+            print(f"DEBUG: Parent frame (pane): {self.pane}")
+            print(f"DEBUG: Pane visible: {self.pane.winfo_viewable()}")
+            print(f"DEBUG: Pane mapped: {self.pane.winfo_ismapped()}")
+            print(f"DEBUG: Pane width: {self.pane.winfo_width()}")
+            print(f"DEBUG: Pane height: {self.pane.winfo_height()}")
+            print(f"DEBUG: Pane x: {self.pane.winfo_x()}")
+            print(f"DEBUG: Pane y: {self.pane.winfo_y()}")
+            
+            # Data content
+            all_children = self.treeview.get_children()
+            print(f"DEBUG: Total root items: {len(all_children)}")
+            
+            for i, child in enumerate(all_children[:5]):  # Show first 5 items
+                text = self.treeview.item(child, 'text')
+                values = self.treeview.item(child, 'values')
+                open_status = self.treeview.item(child, 'open')
+                sub_children = self.treeview.get_children(child)
+                print(f"DEBUG: Item {i}: {child} | Text: '{text}' | Values: {values} | Open: {open_status} | Children: {len(sub_children)}")
+                
+                # Show some sub-items if any
+                for j, sub_child in enumerate(sub_children[:3]):
+                    sub_text = self.treeview.item(sub_child, 'text')
+                    sub_values = self.treeview.item(sub_child, 'values')
+                    print(f"DEBUG:   Sub-item {j}: {sub_child} | Text: '{sub_text}' | Values: {sub_values}")
+            
+            # Column info
+            columns = self.treeview['columns']
+            print(f"DEBUG: Columns: {columns}")
+            for col in columns:
+                width = self.treeview.column(col, 'width')
+                print(f"DEBUG: Column '{col}' width: {width}")
+                
+            # Try to force visibility
+            print(f"DEBUG: Forcing update and focus...")
+            self.treeview.update_idletasks()
+            self.treeview.update()
+            self.treeview.focus_set()
+            
+            # Force geometry updates on parent
+            self.pane.update_idletasks()
+            self.pane.update()
+            
+            # Re-check geometry after forced updates
+            print(f"DEBUG: After forced updates:")
+            print(f"DEBUG: Widget visible: {self.treeview.winfo_viewable()}")
+            print(f"DEBUG: Widget mapped: {self.treeview.winfo_ismapped()}")
+            print(f"DEBUG: Widget width: {self.treeview.winfo_width()}")
+            print(f"DEBUG: Widget height: {self.treeview.winfo_height()}")
+            print(f"DEBUG: Pane visible: {self.pane.winfo_viewable()}")
+            print(f"DEBUG: Pane mapped: {self.pane.winfo_ismapped()}")
+            print(f"DEBUG: Pane width: {self.pane.winfo_width()}")
+            print(f"DEBUG: Pane height: {self.pane.winfo_height()}")
+            
+            # Check if we need to expand items to make them visible
+            if len(all_children) > 0:
+                print(f"DEBUG: Attempting to expand first item...")
+                first_item = all_children[0]
+                self.treeview.item(first_item, open=True)
+                print(f"DEBUG: First item expanded, checking if it has visible children...")
+                expanded_children = self.treeview.get_children(first_item)
+                print(f"DEBUG: First item now has {len(expanded_children)} visible children")
+                
+                # Force another update after expansion
+                self.treeview.update()
+                
+        except Exception as e:
+            print(f"DEBUG: _debug_treeview_state error: {e}")
+        print(f"DEBUG: === END TREEVIEW STATE DEBUG ===")
 
 
     def _set_data_filter_handler(self, filter):
@@ -169,21 +288,28 @@ class DeviceTable():
 
 
     def add_fam14(self, d:Device):
+        print(f"DEBUG: DeviceTable.add_fam14 called for {d.external_id}")
         if d.is_fam14():
             if not self.treeview.exists(d.base_id):
+                print(f"DEBUG: DeviceTable.add_fam14 - Adding new FAM14 {d.base_id}")
                 text = ""
                 comment = ""
                 text = d.name
                 comment = d.comment if d.comment is not None else "" 
                 in_ha = d.use_in_ha
-                self.treeview.insert(parent="", 
-                                     index=0, 
-                                     iid=d.external_id, 
-                                     text=" " + text, 
-                                     values=("", "", "", "", comment, in_ha, "", "", ""),
-                                     image=ImageGallery.get_fam14_icon(self.ICON_SIZE),
-                                     open=True)
+                try:
+                    self.treeview.insert(parent="", 
+                                         index=0, 
+                                         iid=d.external_id, 
+                                         text=" " + text, 
+                                         values=("", "", "", "", comment, in_ha, "", "", ""),
+                                         image=ImageGallery.get_fam14_icon(self.ICON_SIZE),
+                                         open=True)
+                    print(f"DEBUG: DeviceTable.add_fam14 - Successfully added FAM14 {d.external_id}")
+                except Exception as e:
+                    print(f"ERROR: DeviceTable.add_fam14 - Failed to add FAM14 {d.external_id}: {e}")
             else:
+                print(f"DEBUG: DeviceTable.add_fam14 - Updating existing FAM14 {d.base_id}")
                 self.treeview.item(d.base_id, 
                                    text=" " + d.name, 
                                    values=("", "", "", "", d.comment, d.use_in_ha, "", "", ""),
@@ -203,16 +329,22 @@ class DeviceTable():
                                  open=True)
 
 
-    def update_device_representation_handler(self, d:Device):
-        self.update_device_handler(d)
+    def update_device_representation_handler(self, device:Device):
+        print(f"DEBUG: DeviceTable.update_device_representation_handler called for {device.external_id}")
+        if device.bus_device and not device.is_bus_device():
+            device.bus_device = False
+        self.update_device_handler(device)
 
 
     def update_device_handler(self, d:Device, parent:str=None):
+        print(f"DEBUG: DeviceTable.update_device_handler called for {d.external_id}, parent={parent}")
 
         if self.current_data_filter is not None and not self.current_data_filter.filter_device(d):
+            print(f"DEBUG: DeviceTable.update_device_handler - Device {d.external_id} filtered out")
             return
 
         if not d.is_fam14():
+            print(f"DEBUG: DeviceTable.update_device_handler - Processing non-FAM14 device {d.external_id}")
             in_ha = d.use_in_ha
             ha_pl = "" if d.ha_platform is None else d.ha_platform
             eep = "" if d.eep is None else d.eep
@@ -238,16 +370,40 @@ class DeviceTable():
                 image = ImageGallery.get_blank(self.ICON_SIZE)
 
             _parent = d.base_id if parent is None else parent
-            if not self.treeview.exists(_parent): self.add_fam14(self.data_manager.devices[_parent])
+            print(f"DEBUG: DeviceTable.update_device_handler - Determined parent: {_parent}")
+            
+            if not self.treeview.exists(_parent): 
+                print(f"DEBUG: DeviceTable.update_device_handler - Parent {_parent} doesn't exist, adding FAM14")
+                self.add_fam14(self.data_manager.devices[_parent])
+                
             if not self.treeview.exists(d.external_id):
-                self.treeview.insert(parent=_parent, 
-                                     index="end", 
-                                     iid=d.external_id, 
-                                     text=" " + d.name, 
-                                     values=(d.address, d.external_id, device_type, key_func, comment, in_ha, ha_pl, eep, sender_adr, sender_eep), 
-                                     open=True)
-                self.treeview.item(d.external_id, image=image)
+                print(f"DEBUG: DeviceTable.update_device_handler - Adding device {d.external_id} to treeview under parent {_parent}")
+                try:
+                    self.treeview.insert(parent=_parent, 
+                                         index="end", 
+                                         iid=d.external_id, 
+                                         text=" " + d.name, 
+                                         values=(d.address, d.external_id, device_type, key_func, comment, in_ha, ha_pl, eep, sender_adr, sender_eep), 
+                                         open=True)
+                    self.treeview.item(d.external_id, image=image)
+                    print(f"DEBUG: DeviceTable.update_device_handler - Successfully added device {d.external_id} to treeview")
+                    
+                    # Debug: Check if the item is actually in the treeview
+                    items = self.treeview.get_children()
+                    all_items = []
+                    for item in items:
+                        all_items.append(item)
+                        all_items.extend(self.treeview.get_children(item))
+                    print(f"DEBUG: DeviceTable.update_device_handler - Total items in treeview: {len(all_items)}")
+                    print(f"DEBUG: DeviceTable.update_device_handler - Treeview items: {all_items}")
+                    
+                    # Force treeview update and refresh
+                    self.treeview.update()
+                    self.treeview.update_idletasks()
+                except Exception as e:
+                    print(f"ERROR: DeviceTable.update_device_handler - Failed to add device {d.external_id} to treeview: {e}")
             else:
+                print(f"DEBUG: DeviceTable.update_device_handler - Updating existing device {d.external_id}")
                 # update device
                 self.treeview.item(d.external_id, 
                                    text=" " + d.name, 
@@ -257,6 +413,7 @@ class DeviceTable():
                 if self.treeview.parent(d.external_id) != _parent:
                     self.treeview.move(d.external_id, _parent, 0)
         else:
+            print(f"DEBUG: DeviceTable.update_device_handler - Processing FAM14 device {d.external_id}")
             self.add_fam14(d)
         # self.trigger_blinking(d.external_id)
             
@@ -315,4 +472,5 @@ class DeviceTable():
 
 
     def update_sensor_representation_handler(self, d:Device):
+        print(f"DEBUG: DeviceTable.update_sensor_representation_handler called for {d.external_id}")
         self.update_device_handler(d, parent=self.NON_BUS_DEVICE_LABEL)
