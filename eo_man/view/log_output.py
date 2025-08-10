@@ -95,9 +95,6 @@ class LogOutputPanel():
             display_esp2:str = f", ESP2: {telegram.serialize().hex()}" if self.show_esp2_binary.get() else ''
             display_esp3:str = f", ESP3: { ''.join(f'{num:02x}' for num in ESP3SerialCommunicator.convert_esp2_to_esp3_message(telegram).build())}" if self.show_esp3_binary.get() else ''
 
-            log_msg     = f"Received Telegram: {tt} from {adr}{payload}{values}"
-            LOGGER.info(log_msg)
-
             display_msg = f"Received Telegram: {tt} from {adr}{payload}{display_values}{display_esp2}{display_esp3}"
             self.receive_log_message({'msg': display_msg, 'color': 'darkgrey'})
 

@@ -2,7 +2,7 @@ from typing import Dict, List
 
 import tkinter as tk
 from tkinter import *
-from tkinter import ttk
+from tkinter import ttk, Frame
 from idlelib.tooltip import Hovertip
 import threading
 
@@ -34,58 +34,63 @@ class SerialConnectionBar():
         f = LabelFrame(main, text="Serial Connection", bd=1)#, relief=SUNKEN)
         f.grid(row=row, column=0, columnspan=1, sticky=W+E+N+S, pady=(0,2), padx=2)
 
-        self.b_detect = ttk.Button(f, text="Detect Serial Ports")
-        self.b_detect.pack(side=tk.LEFT, padx=(5, 5), pady=5)
+        # First row - Serial connection controls
+        f_row1 = Frame(f)
+        f_row1.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(5, 2))
+
+        self.b_detect = ttk.Button(f_row1, text="Detect Serial Ports")
+        self.b_detect.pack(side=tk.LEFT, padx=(0, 5))
         self.b_detect.config(command=lambda : self.detect_serial_ports_command(force_reload=True) )
         Hovertip(self.b_detect,"Serial port detection is sometime unstable. Please try again if device was not detected.",300)
 
-        l = Label(f, text="Gateway Type: ")
-        l.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        l = Label(f_row1, text="Gateway Type: ")
+        l.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.cb_device_type = ttk.Combobox(f, state="readonly", width="18") 
-        self.cb_device_type.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.cb_device_type = ttk.Combobox(f_row1, state="readonly", width="18") 
+        self.cb_device_type.pack(side=tk.LEFT, padx=(0, 5))
         self.cb_device_type['values'] = get_display_names() # ['FAM14', 'FGW14-USB', 'FAM-USB', 'USB300', 'LAN Gateway']
         self.cb_device_type.set(self.cb_device_type['values'][0])
         self.cb_device_type.bind('<<ComboboxSelected>>', self.on_device_type_changed)
 
-        l = ttk.Label(f, text="Serial Port: ")
-        l.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        l = ttk.Label(f_row1, text="Serial Port: ")
+        l.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.cb_serial_ports = ttk.Combobox(f, state=NORMAL, width="14") 
-        self.cb_serial_ports.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.cb_serial_ports = ttk.Combobox(f_row1, state=NORMAL, width="14") 
+        self.cb_serial_ports.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.b_connect = ttk.Button(f, text="Connect", state=NORMAL, command=self.toggle_serial_connection_command)
-        self.b_connect.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.b_connect = ttk.Button(f_row1, text="Connect", state=NORMAL, command=self.toggle_serial_connection_command)
+        self.b_connect.pack(side=tk.LEFT, padx=(0, 5))
 
-        s = ttk.Separator(f, orient=VERTICAL )
-        s.pack(side=tk.LEFT, padx=(0,5), pady=0, fill="y")
+        s = ttk.Separator(f_row1, orient=VERTICAL )
+        s.pack(side=tk.LEFT, padx=(0,5), fill="y")
 
-        self.b_scan = ttk.Button(f, text="Scan for devices", state=DISABLED, command=self.scan_for_devices)
-        self.b_scan.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.b_scan = ttk.Button(f_row1, text="Scan for devices", state=DISABLED, command=self.scan_for_devices)
+        self.b_scan.pack(side=tk.LEFT, padx=(0, 5))
 
         self.overwrite = tk.BooleanVar()
-        self.cb_overwrite = ttk.Checkbutton(f, text="Overwrite existing values", variable=self.overwrite)
-        self.cb_overwrite.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.cb_overwrite = ttk.Checkbutton(f_row1, text="Overwrite existing values", variable=self.overwrite)
+        self.cb_overwrite.pack(side=tk.LEFT, padx=(0, 5))
 
-        s = ttk.Separator(f, orient=VERTICAL )
-        s.pack(side=tk.LEFT, padx=(0,5), pady=0, fill="y")
+        # Second row - HA sender programming controls
+        f_row2 = Frame(f)
+        f_row2.pack(side=tk.TOP, fill=tk.X, padx=5, pady=(2, 5))
 
         text  = "Ensures sender configuration for Home Assistant is written into device memory.\n"
         text += "* Gateways will be added when being once connected.\n"
         text += "* Only devices connected to FAM14 via wire will be updated.\n"
         text += "* Button will be enabled when FAM14 is connected."
 
-        l = ttk.Label(f, text="Program HA senders into devices: ")
+        l = ttk.Label(f_row2, text="Program HA senders into devices: ")
         Hovertip(l, text, 300)
-        l.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        l.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.cb_gateways_for_HA = ttk.Combobox(f, state="readonly", width="24") 
+        self.cb_gateways_for_HA = ttk.Combobox(f_row2, state="readonly", width="24") 
         Hovertip(self.cb_gateways_for_HA, text, 300)
-        self.cb_gateways_for_HA.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.cb_gateways_for_HA.pack(side=tk.LEFT, padx=(0, 5))
 
-        self.b_sync_ha_sender = ttk.Button(f, text="Write to devices", state=DISABLED, command=self.write_ha_senders_to_devices)
+        self.b_sync_ha_sender = ttk.Button(f_row2, text="Write to devices", state=DISABLED, command=self.write_ha_senders_to_devices)
         Hovertip(self.b_sync_ha_sender, text, 300)
-        self.b_sync_ha_sender.pack(side=tk.LEFT, padx=(0, 5), pady=5)
+        self.b_sync_ha_sender.pack(side=tk.LEFT, padx=(0, 5))
 
         # # if connected via fam14 force to get status update message
         # b = ttk.Button(f, text="Send Poll", command=lambda: self.serial_cntr.send_message(EltakoPollForced(5)))
@@ -120,26 +125,42 @@ class SerialConnectionBar():
 
 
     def write_ha_senders_to_devices(self):
-        # get gateways and its base id
-        baseId = self.cb_gateways_for_HA.get().split(' ')[-1].replace('(', '').replace(')', '')
-        g = self.data_manager.devices.get(baseId, None)
-        if g.is_wired_gateway():
-            sender_base_id = '00-00-B0-00'
-        else:
-            sender_base_id = g.base_id
-
-        # get sender list to be entered
+        LOGGER.debug("write_ha_senders_to_devices called")
+        
+        # get all devices from data manager
+        devices = self.data_manager.devices.values()
+        devices_list = list(devices)  # Convert to list to get count
+        LOGGER.debug(f"Retrieved {len(devices_list)} devices from data manager")
+        
+        # prepare ha sender data
         sender_list = {}
-        for d in self.data_manager.devices.values():
-            if d.base_id == self.serial_cntr.current_base_id and d.use_in_ha:
-                if 'sender' in d.additional_fields:
-                    sender_list[d.external_id] = dict(d.additional_fields)
-                    sender_id = data_helper.a2i(sender_base_id) + data_helper.a2i(d.address)
-                    sender_list[d.external_id]['sender']['id'] =  data_helper.a2s(sender_id)
+        for device in devices_list:
+            device_id = device.external_id  # Use external_id instead of converting address_hex
+            LOGGER.debug(f"Processing device {device_id} (type: {device.device_type})")
+            
+            # Check if device has sender configuration in additional_fields
+            sender_data = None
+            if hasattr(device, 'additional_fields') and device.additional_fields is not None:
+                if 'sender' in device.additional_fields:
+                    sender_data = {'sender': device.additional_fields['sender']}
+                    LOGGER.debug(f"Device {device_id} has sender data: {sender_data}")
+                else:
+                    LOGGER.debug(f"Device {device_id} has no sender in additional_fields: {device.additional_fields}")
+            else:
+                LOGGER.debug(f"Device {device_id} has no additional_fields")
+            
+            if sender_data is not None:
+                sender_list[device_id] = sender_data
+                LOGGER.debug(f"Added device {device_id} to sender list with data: {sender_data}")
+            else:
+                LOGGER.debug(f"No sender data for device {device_id}")
 
-        self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {
-            'msg': f'Write sender ids to devices for gateway {self.cb_gateways_for_HA.get()} with sender base id {sender_base_id} on bus with base id {self.serial_cntr.current_base_id}',
-            'color': 'lightgreen'})
+        LOGGER.debug(f"Final sender list has {len(sender_list)} entries:")
+        for device_id, data in sender_list.items():
+            LOGGER.debug(f"  {device_id}: {data}")
+        
+        # call serial controller
+        LOGGER.debug("Calling serial_controller.write_sender_id_to_devices")
         self.serial_cntr.write_sender_id_to_devices(sender_list)
         
 

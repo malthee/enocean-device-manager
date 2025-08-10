@@ -404,23 +404,43 @@ class SerialController():
             self._serial_bus.set_callback( self._received_serial_event )
 
     def write_sender_id_to_devices(self, sender_id_list:dict={}):
+        print(f"[DEBUG] write_sender_id_to_devices called with {len(sender_id_list)} entries")
+        for device_id, data in sender_id_list.items():
+            print(f"[DEBUG] Device {device_id}: {data}")
+        
         t = threading.Thread(target=lambda: asyncio.run( self.async_write_sender_id_to_devices(sender_id_list) )  )
         t.start()
 
 
     async def async_ensure_programmed(self, fam14_base_id_int:int, dev:BusObject, sender_id_list:dict):
+        print(f"[DEBUG] async_ensure_programmed: Processing device {type(dev).__name__} at address {dev.address}, size {dev.size}")
+        print(f"[DEBUG] Device is programmable: {isinstance(dev, HasProgrammableRPS) or isinstance(dev, DimmerStyle)}")
+        
         #HEATING = [FAE14SSR]
         if isinstance(dev, HasProgrammableRPS) or isinstance(dev, DimmerStyle):# or type(dev) in HEATING:
             for i in range(0,dev.size):
                 device_ext_id_str = b2s( (fam14_base_id_int + dev.address+i).to_bytes(4,'big'))
+                print(f"[DEBUG] Checking device external ID: {device_ext_id_str} (slot {i})")
 
                 if device_ext_id_str in sender_id_list:
+                    print(f"[DEBUG] Found sender data for device {device_ext_id_str}")
                     update_result = None
                     if 'sender' in sender_id_list[device_ext_id_str]:
                         sender_id_str = sender_id_list[device_ext_id_str]['sender']['id']
                         sender_eep_str = sender_id_list[device_ext_id_str]['sender']['eep']
-                        sender_address = AddressExpression.parse(sender_id_str)
+                        print(f"[DEBUG] Writing sender ID {sender_id_str} with EEP {sender_eep_str} to device {device_ext_id_str}")
+                        
+                        # Convert short sender ID to full address format
+                        if len(sender_id_str) == 2:  # Short format like "01"
+                            # Convert to full address format by padding with fam14 base id
+                            sender_id_full = f"{b2s(fam14_base_id_int.to_bytes(4,'big'))[:-2]}{sender_id_str}"
+                            print(f"[DEBUG] Converted short sender ID '{sender_id_str}' to full address '{sender_id_full}'")
+                        else:
+                            sender_id_full = sender_id_str
+                            
+                        sender_address = AddressExpression.parse(sender_id_full)
                         eep_profile = EEP.find(sender_eep_str)
+                        print(f"[DEBUG] Parsed sender address: {sender_address}, EEP profile: {eep_profile}")
 
                         # if type(dev) in HEATING:
                         #     # need to be at a special position 12 and 13
@@ -437,29 +457,33 @@ class SerialController():
 
                         while retry > 0:
                             try:
+                                print(f"[DEBUG] Attempting to program device {device_ext_id_str}, attempt {4-retry}/3")
                                 update_result = await dev.ensure_programmed(i, sender_address, eep_profile)
+                                print(f"[DEBUG] Programming result: {update_result}")
                                 retry=0
                                 exception = None
                                 time.sleep(0.2) # delay to avoid buffer overflow
 
                             except WriteError as e:
+                                print(f"[DEBUG] WriteError during programming: {e}")
                                 logging.exception(str(e))
                                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, error_msg)
                                 retry -= 1
                                 exception = e
                             except TimeoutError as e:
+                                print(f"[DEBUG] TimeoutError during programming: {e}")
                                 logging.exception(str(e))
                                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, error_msg)
                                 retry -= 1
                                 exception = e
                             except Exception as e:
+                                print(f"[DEBUG] General exception during programming: {e}")
                                 logging.exception(str(e))
                                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, error_msg)
                                 retry -= 1
                                 exception = e
-                                
-
                         if exception is not None:
+                            print(f"[DEBUG] Programming failed after all retries: {exception}")
                             raise exception
                                 
                         if update_result is None:
@@ -469,38 +493,57 @@ class SerialController():
                         else:
                             msg = f'Sender id {sender_id_str} for eep {sender_eep_str} in device {type(dev).__name__} {device_ext_id_str} already exists.'
 
+                        print(f"[DEBUG] Final result message: {msg}")
                         self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': msg, 'color':'grey'})
                         self.app_bus.fire_event(AppBusEventType.WRITE_SENDER_IDS_TO_DEVICES_STATUS, 'DEVICE_UPDATED')
+                else:
+                    print(f"[DEBUG] No sender data found for device {device_ext_id_str}")
+        else:
+            print(f"[DEBUG] Device {type(dev).__name__} is not programmable, skipping")
 
 
     async def async_write_sender_id_to_devices(self, sender_id_list:dict={}): # 45056 = 0x00 00 B0 00
+        print(f"[DEBUG] async_write_sender_id_to_devices started with {len(sender_id_list)} sender entries")
+        
         if not self.is_fam14_connection_active():
+            print("[DEBUG] FAM14 connection not active")
             self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': "Cannot write HA sender ids to devices because you are not connected to FAM14.", 'color':'red'})
         else:
+            print("[DEBUG] FAM14 connection is active, proceeding...")
             try:
                 self.app_bus.fire_event(AppBusEventType.WRITE_SENDER_IDS_TO_DEVICES_STATUS, 'STARTED')
+                print("[DEBUG] Disabling serial callback")
                 self._serial_bus.set_callback( None )
 
                 # print("Sending a lock command onto the bus; its reply should tell us whether there's a FAM in the game.")
                 time.sleep(0.2)
+                print("[DEBUG] Locking bus")
                 await locking.lock_bus(self._serial_bus)
                 
                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': "Start writing Home Assistant sender ids to devices", 'color':'red'})
 
                 # first get fam14 and make it know to data manager
+                print("[DEBUG] Creating FAM14 bus object")
                 fam14:FAM14 = await create_busobject(bus=self._serial_bus, id=255)
                 fam14_base_id_int = await fam14.get_base_id_in_int()
                 fam14_base_id = b2s(await fam14.get_base_id_in_bytes())
                 msg = f"Update devices on Bus (fam14 base id: {fam14_base_id})"
+                print(f"[DEBUG] FAM14 base ID: {fam14_base_id} (int: {fam14_base_id_int})")
                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': msg, 'color':'grey'})
 
                 # iterate through all devices
+                print("[DEBUG] Starting device enumeration")
+                device_count = 0
                 async for dev in self.enumerate_bus():
+                    device_count += 1
+                    print(f"[DEBUG] Processing device #{device_count}: {type(dev).__name__} at address {dev.address}")
                     await self.async_ensure_programmed(fam14_base_id_int, dev, sender_id_list)
 
+                print(f"[DEBUG] Processed {device_count} devices total")
                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': "Device scan finished.", 'color':'red'})
             except Exception as e:
                 msg = 'Write sender id to devices failed!'
+                print(f"[DEBUG] Exception in async_write_sender_id_to_devices: {e}")
                 self.app_bus.fire_event(AppBusEventType.LOG_MESSAGE, {'msg': msg, 'log-level': 'ERROR', 'color': 'red'})
                 logging.exception(msg, exc_info=True)
                 raise e
